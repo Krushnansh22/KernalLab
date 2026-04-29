@@ -3,6 +3,26 @@
 
 ---
 
+## 🎓 NEW: Simplified & Animated Frontend!
+
+The frontend has been **completely redesigned** to be **clearer and easier to understand** for students!
+
+### ✨ What's Improved:
+- **Interactive Tutorial** 📚 - 6-step guided learning on first launch
+- **Animated Visualizations** 🎨 - See process states, memory operations, and context switches in real-time
+- **Better Console** 📟 - Events highlighted with smooth animations
+- **Clearer Processes** ⚙️ - Running process glows, state changes animated
+- **Visual Memory** 🧠 - Page faults flash red, better frame visualization
+- **Help Button** ❓ - Reshow tutorial anytime
+
+### 📖 Documentation:
+- [**FRONTEND_QUICKSTART.md**](FRONTEND_QUICKSTART.md) - **Start here!** How to use the new interface
+- [**FRONTEND_SHOWCASE.md**](FRONTEND_SHOWCASE.md) - Visual walkthrough of all features
+- [**FRONTEND_IMPROVEMENTS.md**](FRONTEND_IMPROVEMENTS.md) - Detailed changes & explanations
+- [**CHANGES_SUMMARY.md**](CHANGES_SUMMARY.md) - Technical overview
+
+---
+
 ## Overview
 
 KernelLab is an interactive multiprogramming OS simulator rendered as a full PC-style desktop inside the browser. It visualises:
@@ -21,14 +41,14 @@ KernelLab is an interactive multiprogramming OS simulator rendered as a full PC-
 ┌─────────────────────────────────────┐   HTTP/REST   ┌────────────────────────────────┐
 │   Frontend (React / Next.js)        │◄─────────────►│   Backend (FastAPI / Python)   │
 │                                     │               │                                │
-│  • Boot Screen + Landing Page       │               │  • OSSimulation engine         │
-│  • PC-style Desktop (draggable      │               │  • PCB + Round Robin Scheduler │
-│    windows, taskbar, start menu)    │               │  • Paging & Memory Manager     │
-│  • Process Manager Panel            │               │  • Interrupt Handler           │
-│  • Memory Viewer Panel              │               │  • Error Handler               │
-│  • Interrupt Console                │               │  • In-memory state store       │
-│  • Analytics Panel                  │               │                                │
-│  • System Console                   │               │  Auto-docs: /docs              │
+│  ✨ IMPROVED:                       │               │  • OSSimulation engine         │
+│  • Interactive Tutorial             │               │  • PCB + Round Robin Scheduler │
+│  • Animated Process Manager         │               │  • Paging & Memory Manager     │
+│  • Animated Memory Viewer           │               │  • Interrupt Handler           │
+│  • Animated Interrupt Console       │               │  • Error Handler               │
+│  • Better System Console            │               │  • In-memory state store       │
+│  • Enhanced Analytics               │               │                                │
+│  • Help/Tutorial Button             │               │  Auto-docs: /docs              │
 └─────────────────────────────────────┘               └────────────────────────────────┘
 ```
 

@@ -257,24 +257,35 @@ function PCBDetail({ pcb }) {
   );
 }
 
-// ─── Process Manager Panel ────────────────────────────────────────────────────
+// ─── Animated Process Manager Panel ────────────────────────────────────────────
 function ProcessManagerPanel({ state, onAction, onToast }) {
   const [selected, setSelected] = useState(null);
   const [newName, setNewName] = useState("");
   const [newPriority, setNewPriority] = useState(1);
   const [newPages, setNewPages] = useState(4);
+  const [pulseEffect, setPulseEffect] = useState(new Set());
 
   const procs = state ? Object.values(state.processes).filter(p => p.state !== "Terminated") : [];
   const terminated = state ? Object.values(state.processes).filter(p => p.state === "Terminated") : [];
   const selPCB = selected != null && state ? state.processes[selected] : null;
+  const runningPid = state?.running_pid;
+
+  // Pulse effect on state change
+  useEffect(() => {
+    if (runningPid != null) {
+      setPulseEffect(new Set([runningPid]));
+      const timer = setTimeout(() => setPulseEffect(new Set()), 600);
+      return () => clearTimeout(timer);
+    }
+  }, [runningPid]);
 
   const handleAdd = async () => {
     try {
       await apiFetch("/process/add", "POST", { name: newName || null, priority: newPriority, num_pages: newPages });
       onAction();
       setNewName("");
-      onToast("Process added.", "success");
-    } catch (e) { onToast(e.message, "error"); }
+      onToast("✓ Process added.", "success");
+    } catch (e) { onToast("✕ " + e.message, "error"); }
   };
 
   const handleKill = async () => {
@@ -282,22 +293,35 @@ function ProcessManagerPanel({ state, onAction, onToast }) {
     try {
       await apiFetch("/process/kill", "POST", { pid: selected });
       onAction(); setSelected(null);
-      onToast(`PID ${selected} killed.`, "warn");
+      onToast(`✓ PID ${selected} terminated.`, "success");
     } catch (e) { onToast(e.message, "error"); }
   };
 
   const handlePriorityChange = async (pid, p) => {
     try {
       await apiFetch("/process/priority", "POST", { pid, priority: Number(p) });
-      onAction(); onToast(`PID ${pid} priority → ${p}`, "success");
+      onAction(); onToast(`✓ PID ${pid} priority → ${p}`, "success");
     } catch (e) { onToast(e.message, "error"); }
+  };
+
+  const getStateAnimationStyle = (pid, state) => {
+    const isRunning = pid === runningPid;
+    const isPulsing = pulseEffect.has(pid);
+    const stateColor = STATE_COLORS[state] || "#aaa";
+    
+    return {
+      background: selected === pid ? "#1a2a3a" : isRunning ? `${stateColor}15` : "#0a1420",
+      border: `2px solid ${selected === pid ? "#4fc3f7" : isRunning ? stateColor : "#1e3a5f"}`,
+      boxShadow: isRunning ? `inset 0 0 12px ${stateColor}40, 0 0 8px ${stateColor}30` : "none",
+      animation: isPulsing ? "slideIn 0.6s ease-out" : "none",
+    };
   };
 
   return (
     <div style={{ fontSize: 11, display: "flex", flexDirection: "column", gap: 10, height: "100%" }}>
       {/* Add process */}
       <div style={{ background: "#0a1420", border: "1px solid #1e3a5f", borderRadius: 6, padding: 8 }}>
-        <div style={{ color: "#4fc3f7", fontSize: 9, marginBottom: 6, letterSpacing: 1 }}>NEW PROCESS</div>
+        <div style={{ color: "#4fc3f7", fontSize: 9, marginBottom: 6, letterSpacing: 1 }}>➕ NEW PROCESS</div>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
           <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="Name (optional)"
             style={inputStyle} />
@@ -315,58 +339,65 @@ function ProcessManagerPanel({ state, onAction, onToast }) {
         </div>
       </div>
 
-      {/* Process list */}
+      {/* Process list with animations */}
       <div style={{ flex: 1, overflowY: "auto" }}>
-        <div style={{ color: "#4fc3f7", fontSize: 9, marginBottom: 4, letterSpacing: 1 }}>
-          ACTIVE PROCESSES ({procs.length})
+        <div style={{ color: "#4fc3f7", fontSize: 9, marginBottom: 6, letterSpacing: 1, display: "flex", alignItems: "center", gap: 6 }}>
+          🔄 PROCESSES ({procs.length})
+          {runningPid != null && <span style={{ color: "#00ff88", fontSize: 8 }}>→ Running: P{runningPid}</span>}
         </div>
-        {procs.length === 0 && <div style={{ color: "#444", fontStyle: "italic" }}>No active processes.</div>}
+        {procs.length === 0 && <div style={{ color: "#444", fontStyle: "italic" }}>No active processes. Create one above.</div>}
         {procs.map(p => (
           <div
             key={p.pid}
             onClick={() => setSelected(p.pid === selected ? null : p.pid)}
             style={{
               display: "flex", alignItems: "center", gap: 8,
-              padding: "5px 8px", borderRadius: 4, marginBottom: 3, cursor: "pointer",
-              background: selected === p.pid ? "#1a2a3a" : "#0a1420",
-              border: `1px solid ${selected === p.pid ? "#4fc3f7" : "#1e3a5f"}`,
+              padding: "6px 8px", borderRadius: 4, marginBottom: 4, cursor: "pointer",
+              ...getStateAnimationStyle(p.pid, p.state),
+              transition: "all 0.3s ease",
             }}
           >
+            {/* State indicator */}
             <span style={{
-              width: 8, height: 8, borderRadius: "50%",
+              width: 10, height: 10, borderRadius: "50%",
               background: STATE_COLORS[p.state] || "#666",
               boxShadow: `0 0 6px ${STATE_COLORS[p.state] || "#666"}`,
               flexShrink: 0,
+              animation: p.pid === runningPid ? "blink 0.6s infinite" : "none",
             }} />
-            <span style={{ color: "#7ec8e3", width: 32 }}>P{p.pid}</span>
-            <span style={{ flex: 1, color: "#c0d8f0" }}>{p.name}</span>
-            <span style={{ color: STATE_COLORS[p.state], fontSize: 9, width: 62 }}>{p.state}</span>
-            <span style={{ color: "#666", fontSize: 9, width: 28 }}>pr:{p.priority}</span>
+            
+            <span style={{ color: "#7ec8e3", width: 32, fontWeight: 700 }}>P{p.pid}</span>
+            <span style={{ flex: 1, color: "#c0d8f0" }}>{p.name || "Process"}</span>
+            <span style={{ color: STATE_COLORS[p.state], fontSize: 9, width: 70, fontWeight: 600 }}>
+              {p.state === "Running" ? "▶ " + p.state : p.state}
+            </span>
+            <span style={{ color: "#666", fontSize: 9 }}>pri:{p.priority}</span>
             {p.state !== "Terminated" && (
               <select
                 value={p.priority}
                 onClick={e => e.stopPropagation()}
                 onChange={e => { e.stopPropagation(); handlePriorityChange(p.pid, e.target.value); }}
-                style={{ background: "#0d1b2a", border: "1px solid #1e3a5f", color: "#4fc3f7", borderRadius: 3, fontSize: 9, padding: "1px 2px" }}
+                style={{ background: "#0d1b2a", border: "1px solid #1e3a5f", color: "#4fc3f7", borderRadius: 3, fontSize: 8, padding: "2px 4px" }}
               >
                 {[1,2,3,4,5,6,7,8,9,10].map(v => <option key={v} value={v}>{v}</option>)}
               </select>
             )}
           </div>
         ))}
+        
         {terminated.length > 0 && (
           <>
-            <div style={{ color: "#555", fontSize: 9, marginTop: 6, marginBottom: 4, letterSpacing: 1 }}>
-              TERMINATED ({terminated.length})
+            <div style={{ color: "#555", fontSize: 9, marginTop: 8, marginBottom: 4, letterSpacing: 1 }}>
+              ⏹ TERMINATED ({terminated.length})
             </div>
-            {terminated.slice(-5).map(p => (
+            {terminated.slice(-3).map(p => (
               <div key={p.pid} style={{
-                display: "flex", gap: 8, padding: "3px 8px", borderRadius: 3,
-                background: "#0a0a0a", border: "1px solid #1a1a1a", marginBottom: 2, opacity: 0.5,
+                display: "flex", gap: 8, padding: "4px 8px", borderRadius: 3,
+                background: "#0a0a0a", border: "1px solid #1a1a1a", marginBottom: 2, opacity: 0.6,
               }}>
                 <span style={{ color: "#ef5350", width: 32 }}>P{p.pid}</span>
-                <span style={{ flex: 1, color: "#666" }}>{p.name}</span>
-                <span style={{ color: "#ef5350", fontSize: 9 }}>Terminated</span>
+                <span style={{ flex: 1, color: "#666", fontSize: 10 }}>{p.name || "Process"}</span>
+                <span style={{ color: "#ef5350", fontSize: 8 }}>TERMINATED</span>
               </div>
             ))}
           </>
@@ -377,7 +408,7 @@ function ProcessManagerPanel({ state, onAction, onToast }) {
       {selPCB && (
         <div style={{ borderTop: "1px solid #1e3a5f", paddingTop: 8 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-            <div style={{ color: "#4fc3f7", fontSize: 9, letterSpacing: 1 }}>PCB — PID {selPCB.pid}</div>
+            <div style={{ color: "#4fc3f7", fontSize: 9, letterSpacing: 1 }}>📋 PCB — PID {selPCB.pid}</div>
             {selPCB.state !== "Terminated" && (
               <button onClick={handleKill} style={actionBtn("#ef5350", "#fff")}>☠ Kill</button>
             )}
@@ -385,14 +416,41 @@ function ProcessManagerPanel({ state, onAction, onToast }) {
           <PCBDetail pcb={selPCB} />
         </div>
       )}
+      
+      <style>{`
+        @keyframes blink {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.5; }
+        }
+        @keyframes slideIn {
+          0% { transform: translateX(-4px); }
+          100% { transform: translateX(0); }
+        }
+      `}</style>
     </div>
   );
 }
 
-// ─── Memory Panel ─────────────────────────────────────────────────────────────
+// ─── Memory Panel with Animations ────────────────────────────────────────────
 function MemoryPanel({ state }) {
   const [selectedPid, setSelectedPid] = useState(null);
+  const [flashFrames, setFlashFrames] = useState(new Set());
+
   if (!state) return <div style={{ color: "#666" }}>Loading...</div>;
+
+  // Flash effect on page fault
+  useEffect(() => {
+    if (state.page_faults > 0 && flashFrames.size === 0) {
+      const affected = new Set();
+      state.frame_grid.forEach((f, i) => {
+        if (!f.free && Math.random() > 0.7) affected.add(i);
+      });
+      if (affected.size > 0) {
+        setFlashFrames(affected);
+        setTimeout(() => setFlashFrames(new Set()), 600);
+      }
+    }
+  }, [state.page_faults]);
 
   const procs = Object.values(state.processes).filter(p => p.state !== "Terminated");
   const pidColors = {};
@@ -404,25 +462,30 @@ function MemoryPanel({ state }) {
       <div style={{ display: "flex", gap: 12, marginBottom: 10, flexWrap: "wrap" }}>
         <Metric label="Free Frames" val={state.free_frames} color="#00ff88" />
         <Metric label="Used Frames" val={state.total_frames - state.free_frames} color="#ffb74d" />
-        <Metric label="Page Faults" val={state.page_faults} color="#ef5350" />
+        <Metric label="Page Faults" val={state.page_faults} color={state.page_faults > 5 ? "#ef5350" : "#ff9800"} />
       </div>
 
-      {/* Frame grid */}
+      {/* Frame grid with animations */}
       <div style={{ marginBottom: 8 }}>
-        <div style={{ color: "#4fc3f7", fontSize: 9, marginBottom: 4, letterSpacing: 1 }}>PHYSICAL FRAME MAP ({state.total_frames} frames)</div>
+        <div style={{ color: "#4fc3f7", fontSize: 9, marginBottom: 4, letterSpacing: 1, display: "flex", alignItems: "center", gap: 8 }}>
+          🧠 PHYSICAL FRAME MAP ({state.total_frames} frames)
+          {state.page_faults > 0 && <span style={{ color: "#ef5350", fontSize: 8, fontWeight: 700 }}>⚠ {state.page_faults} page faults</span>}
+        </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(8, 1fr)", gap: 3 }}>
-          {state.frame_grid.map(f => (
+          {state.frame_grid.map((f, i) => (
             <div
               key={f.frame}
               title={f.free ? `Frame ${f.frame}: Free` : `Frame ${f.frame}: PID ${f.pid}`}
               style={{
-                height: 24, borderRadius: 3,
+                height: 28, borderRadius: 4,
                 background: f.free ? "#0a1420" : pidColors[f.pid] || "#666",
-                border: `1px solid ${f.free ? "#1e3a5f" : "transparent"}`,
+                border: `2px solid ${f.free ? "#1e3a5f" : pidColors[f.pid] || "#555"}`,
                 display: "flex", alignItems: "center", justifyContent: "center",
                 fontSize: 8, color: f.free ? "#333" : "#000", fontWeight: 700,
                 cursor: "default",
                 opacity: f.free ? 0.6 : 1,
+                animation: flashFrames.has(i) ? "frameFault 0.6s ease-out" : "none",
+                transition: "all 0.3s ease",
               }}
             >
               {f.free ? "" : `P${f.pid}`}
@@ -432,113 +495,166 @@ function MemoryPanel({ state }) {
       </div>
 
       {/* Legend */}
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10, paddingBottom: 10, borderBottom: "1px solid #1e3a5f" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 9, color: "#888" }}>
-          <div style={{ width: 10, height: 10, background: "#0a1420", border: "1px solid #1e3a5f", borderRadius: 2 }} />
+          <div style={{ width: 12, height: 12, background: "#0a1420", border: "2px solid #1e3a5f", borderRadius: 2 }} />
           Free
         </div>
         {procs.map(p => (
           <div key={p.pid} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 9, color: "#aaa" }}>
-            <div style={{ width: 10, height: 10, background: pidColors[p.pid], borderRadius: 2 }} />
-            P{p.pid} ({p.name})
+            <div style={{ width: 12, height: 12, background: pidColors[p.pid], borderRadius: 2 }} />
+            P{p.pid} ({p.name || "Process"})
           </div>
         ))}
       </div>
 
       {/* Page table viewer */}
-      <div style={{ borderTop: "1px solid #1e3a5f", paddingTop: 8 }}>
-        <div style={{ color: "#4fc3f7", fontSize: 9, marginBottom: 4, letterSpacing: 1 }}>PAGE TABLE VIEWER</div>
+      <div>
+        <div style={{ color: "#4fc3f7", fontSize: 9, marginBottom: 4, letterSpacing: 1 }}>📑 PAGE TABLE VIEWER</div>
         <select
           value={selectedPid || ""}
           onChange={e => setSelectedPid(e.target.value ? Number(e.target.value) : null)}
           style={{ ...inputStyle, width: "100%", marginBottom: 6 }}
         >
-          <option value="">— Select Process —</option>
-          {procs.map(p => <option key={p.pid} value={p.pid}>PID {p.pid} — {p.name}</option>)}
+          <option value="">— Select a process to view page table —</option>
+          {procs.map(p => <option key={p.pid} value={p.pid}>PID {p.pid} — {p.name || "Process"}</option>)}
         </select>
         {selectedPid && state.processes[selectedPid] && (
           <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
             {state.processes[selectedPid].page_table.map(e => (
               <div key={e.page_number} style={{
                 background: e.valid ? "#0a2a0a" : "#2a0a0a",
-                border: `1px solid ${e.valid ? "#00ff88" : "#ef5350"}`,
-                borderRadius: 4, padding: "4px 8px", fontSize: 10, textAlign: "center",
+                border: `2px solid ${e.valid ? "#00ff88" : "#ef5350"}`,
+                borderRadius: 4, padding: "6px 10px", fontSize: 10, textAlign: "center",
+                transition: "all 0.3s ease",
               }}>
-                <div style={{ color: "#888", fontSize: 8 }}>PAGE {e.page_number}</div>
-                <div style={{ color: e.valid ? "#00ff88" : "#ef5350", fontWeight: 700 }}>
-                  {e.valid ? `Frame ${e.frame_number}` : "INVALID"}
+                <div style={{ color: "#888", fontSize: 8, marginBottom: 2 }}>PAGE {e.page_number}</div>
+                <div style={{ color: e.valid ? "#00ff88" : "#ef5350", fontWeight: 700, marginBottom: 2 }}>
+                  {e.valid ? `📍 F${e.frame_number}` : "❌ INVALID"}
                 </div>
                 <div style={{ color: "#555", fontSize: 8 }}>
-                  {e.valid ? `→ 0x${(e.frame_number * 256).toString(16).toUpperCase()}` : "—"}
+                  {e.valid ? `0x${(e.frame_number * 256).toString(16).toUpperCase()}` : "Fault"}
                 </div>
               </div>
             ))}
           </div>
         )}
       </div>
+
+      <style>{`
+        @keyframes frameFault {
+          0% { transform: scale(1.1); background-color: #ef5350; }
+          50% { transform: scale(1.05); }
+          100% { transform: scale(1); }
+        }
+      `}</style>
     </div>
   );
 }
 
-// ─── Interrupt Panel ──────────────────────────────────────────────────────────
+// ─── Interrupt Panel with Better Visuals ─────────────────────────────────────
 function InterruptPanel({ state, onAction, onToast }) {
   const [selPid, setSelPid] = useState(null);
+  const [lastInterrupt, setLastInterrupt] = useState(null);
+  
   const procs = state ? Object.values(state.processes).filter(p => p.state !== "Terminated") : [];
+
+  useEffect(() => {
+    if (lastInterrupt) {
+      const timer = setTimeout(() => setLastInterrupt(null), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [lastInterrupt]);
 
   const fire = async (type) => {
     try {
+      setLastInterrupt(type);
       await apiFetch("/interrupt/trigger", "POST", { interrupt_type: type, pid: selPid || null });
-      onAction(); onToast(`${type} interrupt fired.`, "warn");
-    } catch (e) { onToast(e.message, "error"); }
+      onAction(); onToast(`✓ ${type} interrupt triggered`, "warn");
+    } catch (e) { onToast("✕ " + e.message, "error"); }
   };
 
   const pageFault = async () => {
-    if (!selPid) return onToast("Select a process first.", "error");
+    if (!selPid) return onToast("⚠ Select a process first.", "warn");
     try {
+      setLastInterrupt("page-fault");
       await apiFetch("/memory/page_fault", "POST", { pid: selPid });
-      onAction(); onToast(`Page fault injected for PID ${selPid}.`, "warn");
-    } catch (e) { onToast(e.message, "error"); }
+      onAction(); onToast(`✓ Page fault injected for PID ${selPid}`, "warn");
+    } catch (e) { onToast("✕ " + e.message, "error"); }
   };
 
   const interruptBtns = [
-    { label: "⏱ Timer Interrupt", type: "timer", color: "#ffb74d" },
-    { label: "💾 I/O Interrupt", type: "io", color: "#4fc3f7" },
-    { label: "🔧 Syscall", type: "syscall", color: "#ce93d8" },
+    { label: "⏱ Timer Interrupt", type: "timer", color: "#ffb74d", desc: "Forces context switch to another process" },
+    { label: "💾 I/O Interrupt", type: "io", color: "#4fc3f7", desc: "Process waits, CPU schedules next one" },
+    { label: "🔧 Syscall", type: "syscall", color: "#ce93d8", desc: "Process calls OS kernel function" },
   ];
 
   return (
     <div style={{ fontSize: 11 }}>
-      <div style={{ marginBottom: 8 }}>
-        <div style={{ color: "#4fc3f7", fontSize: 9, marginBottom: 4, letterSpacing: 1 }}>TARGET PID (optional)</div>
+      <div style={{ marginBottom: 10 }}>
+        <div style={{ color: "#4fc3f7", fontSize: 9, marginBottom: 4, letterSpacing: 1 }}>🎯 TARGET PROCESS</div>
         <select value={selPid || ""} onChange={e => setSelPid(e.target.value ? Number(e.target.value) : null)}
-          style={{ ...inputStyle, width: "100%" }}>
-          <option value="">— Auto (current running) —</option>
-          {procs.map(p => <option key={p.pid} value={p.pid}>PID {p.pid} — {p.name} [{p.state}]</option>)}
+          style={{ ...inputStyle, width: "100%", marginBottom: 4 }}>
+          <option value="">— Auto (currently running) —</option>
+          {procs.map(p => <option key={p.pid} value={p.pid}>PID {p.pid} — {p.name || "Process"} [{p.state}]</option>)}
         </select>
+        <div style={{ fontSize: 9, color: "#555" }}>If none selected, will interrupt the running process</div>
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 10 }}>
-        {interruptBtns.map(b => (
-          <button key={b.type} onClick={() => fire(b.type)}
-            style={{ ...actionBtn(b.color, "#000"), width: "100%", padding: "8px 12px", fontSize: 11, textAlign: "left" }}>
-            {b.label}
-          </button>
-        ))}
-        <button onClick={pageFault}
-          style={{ ...actionBtn("#ef5350", "#fff"), width: "100%", padding: "8px 12px", fontSize: 11, textAlign: "left" }}>
-          ⚠ Inject Page Fault
-        </button>
+      <div style={{ background: "#0a1420", border: "1px solid #1e3a5f", borderRadius: 6, padding: 10, marginBottom: 10 }}>
+        <div style={{ color: "#4fc3f7", fontSize: 9, marginBottom: 8, letterSpacing: 1 }}>⚡ TRIGGER INTERRUPT</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {interruptBtns.map(b => (
+            <div key={b.type}>
+              <button onClick={() => fire(b.type)}
+                style={{
+                  ...actionBtn(b.color, "#000"),
+                  width: "100%", padding: "8px 12px", fontSize: 10,
+                  textAlign: "left", fontWeight: 700,
+                  animation: lastInterrupt === b.type ? "pulse 0.5s ease" : "none",
+                }}>
+                {b.label}
+              </button>
+              <div style={{ fontSize: 8, color: "#555", marginTop: 2, marginLeft: 4 }}>→ {b.desc}</div>
+            </div>
+          ))}
+          <div style={{ paddingTop: 6, borderTop: "1px solid #1e3a5f" }}>
+            <button onClick={pageFault}
+              style={{
+                ...actionBtn("#ef5350", "#fff"),
+                width: "100%", padding: "8px 12px", fontSize: 10,
+                textAlign: "left", fontWeight: 700,
+                animation: lastInterrupt === "page-fault" ? "pulse 0.5s ease" : "none",
+              }}>
+              ⚠ Inject Page Fault
+            </button>
+            <div style={{ fontSize: 8, color: "#555", marginTop: 2, marginLeft: 4 }}>→ Memory access error, triggers exception handler</div>
+          </div>
+        </div>
       </div>
 
       {state && (
-        <div style={{ background: "#0a1420", border: "1px solid #1e3a5f", borderRadius: 6, padding: 8 }}>
-          <div style={{ color: "#4fc3f7", fontSize: 9, marginBottom: 4, letterSpacing: 1 }}>INTERRUPT STATS</div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <Metric label="Context Switches" val={state.context_switches} color="#4fc3f7" />
-            <Metric label="Page Faults" val={state.page_faults} color="#ef5350" />
+        <div style={{ background: "#0a1420", border: "1px solid #1e3a5f", borderRadius: 6, padding: 10 }}>
+          <div style={{ color: "#4fc3f7", fontSize: 9, marginBottom: 6, letterSpacing: 1 }}>📊 INTERRUPT STATS</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            <div style={{ background: "#0d1b2a", border: "1px solid #1e3a5f", borderRadius: 4, padding: 8, textAlign: "center" }}>
+              <div style={{ color: "#4fc3f7", fontSize: 8, marginBottom: 4 }}>Context Switches</div>
+              <div style={{ color: "#00ff88", fontSize: 16, fontWeight: 700 }}>{state.context_switches}</div>
+            </div>
+            <div style={{ background: "#0d1b2a", border: "1px solid #1e3a5f", borderRadius: 4, padding: 8, textAlign: "center" }}>
+              <div style={{ color: "#ef5350", fontSize: 8, marginBottom: 4 }}>Page Faults</div>
+              <div style={{ color: state.page_faults > 5 ? "#ef5350" : "#ff9800", fontSize: 16, fontWeight: 700 }}>{state.page_faults}</div>
+            </div>
           </div>
         </div>
       )}
+
+      <style>{`
+        @keyframes pulse {
+          0%, 100% { transform: scale(1); }
+          50% { transform: scale(1.05); }
+        }
+      `}</style>
     </div>
   );
 }
@@ -649,32 +765,64 @@ function AnalyticsPanel({ state }) {
   );
 }
 
-// ─── Console Panel ────────────────────────────────────────────────────────────
+// ─── Enhanced Console Panel with Animations ───────────────────────────────────
 function ConsolePanel({ state }) {
   const bottomRef = useRef(null);
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [state?.log]);
+  const [highlightedIndex, setHighlightedIndex] = useState(null);
+  
+  useEffect(() => { 
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    // Highlight the latest event
+    if (state?.log.length > 0) {
+      setHighlightedIndex(state.log.length - 1);
+      const timer = setTimeout(() => setHighlightedIndex(null), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [state?.log]);
 
   const levelColor = { INFO: "#4fc3f7", WARN: "#ffb74d", ERROR: "#ef5350", SUCCESS: "#00ff88" };
+  const levelIcon = { INFO: "ℹ", WARN: "⚠", ERROR: "✕", SUCCESS: "✓" };
 
   if (!state) return <div style={{ color: "#666" }}>Loading...</div>;
 
   return (
     <div style={{ fontSize: 10, fontFamily: "'JetBrains Mono', monospace" }}>
-      {state.log.length === 0 && <div style={{ color: "#444" }}>No events yet.</div>}
-      {state.log.map((e, i) => (
-        <div key={i} style={{ display: "flex", gap: 6, marginBottom: 2, alignItems: "flex-start" }}>
-          <span style={{ color: "#555", flexShrink: 0 }}>[{e.timestamp.toFixed(1)}]</span>
-          <span style={{
-            color: levelColor[e.level] || "#aaa",
-            flexShrink: 0, width: 52, fontSize: 9,
-            background: `${levelColor[e.level]}20`,
-            borderRadius: 2, padding: "0 3px",
-          }}>{e.level}</span>
-          {e.pid != null && <span style={{ color: "#888", flexShrink: 0 }}>P{e.pid}</span>}
-          <span style={{ color: "#c0d8f0" }}>{e.message}</span>
-        </div>
-      ))}
+      {state.log.length === 0 && <div style={{ color: "#444" }}>Waiting for events...</div>}
+      {state.log.map((e, i) => {
+        const isHighlighted = highlightedIndex === i;
+        return (
+          <div key={i} style={{
+            display: "flex", gap: 6, marginBottom: 3, alignItems: "flex-start",
+            padding: "6px 8px", borderRadius: 4,
+            background: isHighlighted ? `${levelColor[e.level]}15` : "transparent",
+            border: `1px solid ${isHighlighted ? levelColor[e.level] : "transparent"}`,
+            animation: isHighlighted ? "pulse 0.6s ease-out" : "none",
+            transition: "all 0.3s ease",
+          }}>
+            <span style={{ color: "#555", flexShrink: 0, width: 50 }}>[{e.timestamp.toFixed(1)}s]</span>
+            <span style={{
+              color: levelColor[e.level] || "#aaa",
+              flexShrink: 0, width: 60, fontSize: 9, fontWeight: 700,
+              background: `${levelColor[e.level]}25`,
+              borderRadius: 3, padding: "2px 6px",
+              display: "flex", alignItems: "center", gap: 4,
+            }}>
+              <span>{levelIcon[e.level]}</span> {e.level}
+            </span>
+            {e.pid != null && <span style={{ color: "#7ec8e3", flexShrink: 0, fontWeight: 700 }}>P{e.pid}</span>}
+            <span style={{ color: "#c0d8f0", flex: 1 }}>{e.message}</span>
+          </div>
+        );
+      })}
       <div ref={bottomRef} />
+      
+      <style>{`
+        @keyframes pulse {
+          0% { transform: scale(0.98); }
+          50% { transform: scale(1.02); }
+          100% { transform: scale(1); }
+        }
+      `}</style>
     </div>
   );
 }
@@ -773,8 +921,95 @@ function actionBtn(bg, fg) {
   };
 }
 
-// ─── Landing Page ─────────────────────────────────────────────────────────────
-function LandingPage({ onLaunch }) {
+// ─── Tutorial Guide Component ─────────────────────────────────────────────────
+function TutorialPanel({ onDismiss }) {
+  const [step, setStep] = useState(0);
+
+  const steps = [
+    {
+      title: "🎓 Welcome to KernelLab!",
+      content: "This simulator shows how operating systems manage processes, memory, and interrupts in real-time.",
+      tips: ["Watch the animations to understand what's happening", "Each color represents a different state", "Events are logged in real-time in the console"],
+    },
+    {
+      title: "🔄 Process States",
+      content: "Processes go through different states: New → Ready → Running → Waiting → Terminated",
+      tips: ["🟢 Green = Running (currently using CPU)", "🔵 Blue = Ready (waiting for CPU)", "🟠 Orange = Waiting (blocked on I/O)", "🔴 Red = Terminated (finished)"],
+    },
+    {
+      title: "⏱ Context Switching",
+      content: "The scheduler switches between processes every few time units (quantum). Look for state changes!",
+      tips: ["Notice how processes alternate between Running and Ready states", "Each switch is logged with a timestamp", "Try changing the time quantum in Settings"],
+    },
+    {
+      title: "🧠 Memory & Paging",
+      content: "Processes use virtual memory addresses. The system maps them to physical frames.",
+      tips: ["Each color in the Memory Viewer represents a process", "Page faults occur when accessing invalid pages", "Look for them in the console when marked with ⚠"],
+    },
+    {
+      title: "⚡ Interrupts",
+      content: "Interrupts pause the current process to handle important events (timers, I/O, errors).",
+      tips: ["Use the Interrupt Console to trigger events", "Watch processes change state on interrupts", "Page faults and I/O create context switches"],
+    },
+    {
+      title: "📊 Understanding Metrics",
+      content: "CPU Utilisation, Context Switches, and Page Faults show system behavior over time.",
+      tips: ["High CPU % = processes keeping CPU busy ✓", "Many page faults = poor memory allocation ✗", "Many context switches = high scheduler activity"],
+    },
+  ];
+
+  const current = steps[step];
+
+  return (
+    <div style={{
+      position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      zIndex: 9999, backdropFilter: "blur(4px)",
+      fontFamily: "'JetBrains Mono', monospace",
+    }}>
+      <div style={{
+        background: "#0a1420", border: "2px solid #4fc3f7",
+        borderRadius: 12, padding: 28, maxWidth: 500,
+        boxShadow: "0 20px 60px rgba(0,0,0,0.8), 0 0 30px rgba(79,195,247,0.2)",
+      }}>
+        <div style={{ color: "#4fc3f7", fontSize: 26, marginBottom: 12 }}>{current.title}</div>
+        <div style={{ color: "#c0d8f0", fontSize: 13, lineHeight: 1.8, marginBottom: 16 }}>{current.content}</div>
+        
+        <div style={{ background: "#0d1b2a", border: "1px solid #1e3a5f", borderRadius: 8, padding: 12, marginBottom: 16 }}>
+          <div style={{ color: "#4fc3f7", fontSize: 10, marginBottom: 8, letterSpacing: 1 }}>💡 KEY TIPS</div>
+          {current.tips.map((tip, i) => (
+            <div key={i} style={{ color: "#7ec8e3", fontSize: 11, marginBottom: 4 }}>
+              ▸ {tip}
+            </div>
+          ))}
+        </div>
+
+        <div style={{ display: "flex", gap: 8, justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ color: "#555", fontSize: 10 }}>Step {step + 1} / {steps.length}</div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              onClick={() => setStep(Math.max(0, step - 1))}
+              disabled={step === 0}
+              style={{ ...actionBtn("#4fc3f7", "#000"), opacity: step === 0 ? 0.5 : 1, cursor: step === 0 ? "default" : "pointer" }}
+            >
+              ← Back
+            </button>
+            {step < steps.length - 1 ? (
+              <button onClick={() => setStep(step + 1)} style={actionBtn("#00ff88", "#000")}>
+                Next →
+              </button>
+            ) : (
+              <button onClick={onDismiss} style={actionBtn("#00ff88", "#000")}>
+                Start Exploring! ▶
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+  function LandingPage({ onLaunch }) {
   return (
     <div style={{
       minHeight: "100vh", background: "#000",
@@ -885,7 +1120,7 @@ function LandingPage({ onLaunch }) {
 }
 
 // ─── Taskbar ──────────────────────────────────────────────────────────────────
-function Taskbar({ state, openWindows, onToggleWindow, onStep, onReset }) {
+function Taskbar({ state, openWindows, onToggleWindow, onStep, onReset, onShowHelp }) {
   const [time, setTime] = useState(new Date());
   useEffect(() => {
     const iv = setInterval(() => setTime(new Date()), 1000);
@@ -942,12 +1177,13 @@ function Taskbar({ state, openWindows, onToggleWindow, onStep, onReset }) {
         <Chip label="CPU" val={`${cpu}%`} color={cpu > 80 ? "#ef5350" : "#00ff88"} />
         <Chip label="Running" val={running != null ? `P${running}` : "idle"} color="#4fc3f7" />
         <Chip label="Ready" val={ready} color="#ffb74d" />
-        <Chip label="Faults" val={faults} color="#ef5350" />
+        <Chip label="Faults" val={faults} color={faults > 5 ? "#ef5350" : "#ff9800"} />
       </div>
 
       {/* Quick controls */}
-      <button onClick={onStep} style={{ ...actionBtn("#4fc3f7", "#000"), fontSize: 9, padding: "3px 8px" }}>⏭ STEP</button>
-      <button onClick={onReset} style={{ ...actionBtn("#ef5350", "#fff"), fontSize: 9, padding: "3px 8px" }}>🔄 RESET</button>
+      <button onClick={onStep} style={{ ...actionBtn("#4fc3f7", "#000"), fontSize: 9, padding: "3px 8px" }}>⏭</button>
+      <button onClick={onReset} style={{ ...actionBtn("#ef5350", "#fff"), fontSize: 9, padding: "3px 8px" }}>🔄</button>
+      <button onClick={onShowHelp} title="Show Tutorial" style={{ ...actionBtn("#ce93d8", "#000"), fontSize: 12, padding: "3px 6px" }}>?</button>
 
       {/* Clock */}
       <div style={{ color: "#4fc3f7", fontSize: 11, minWidth: 60, textAlign: "right" }}>
@@ -1060,6 +1296,7 @@ function Desktop() {
   const [quantum, setQuantum] = useState(3);
   const [showStartMenu, setShowStartMenu] = useState(false);
   const [backendError, setBackendError] = useState(false);
+  const [showTutorial, setShowTutorial] = useState(true);
   const autoRunRef = useRef(autoRun);
   autoRunRef.current = autoRun;
 
@@ -1290,11 +1527,15 @@ function Desktop() {
           onToggleWindow={toggleWindow}
           onStep={handleStep}
           onReset={handleReset}
+          onShowHelp={() => setShowTutorial(true)}
         />
       </div>
 
       {/* Toasts */}
       <ToastContainer toasts={toasts} />
+
+      {/* Tutorial Modal */}
+      {showTutorial && <TutorialPanel onDismiss={() => setShowTutorial(false)} />}
     </div>
   );
 }

@@ -12,7 +12,7 @@ import uvicorn
 from simulation import OSSimulation, SimulationError
 
 app = FastAPI(
-    title="KernelLab API",
+    title="KernelLab",  # Restored original title
     description="Browser-based OS Simulation Engine",
     version="1.0.0",
 )
@@ -140,6 +140,12 @@ def set_quantum(req: SetQuantumRequest):
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/super_health")
+def super_health():
+    """Prints a message to the console"""
+    print("Hello world")
 
 
 if __name__ == "__main__":
