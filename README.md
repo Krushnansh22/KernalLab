@@ -56,36 +56,76 @@ KernelLab is an interactive multiprogramming OS simulator rendered as a full PC-
 
 ## Quick Start
 
-### 1. Backend
+### 1. Backend Setup
 
 ```bash
 cd backend
+
+# Create and activate virtual environment (if not already done)
+python -m venv env
+# On Windows:
+env\Scripts\activate
+# On macOS/Linux:
+source env/bin/activate
+
+# Install dependencies
 pip install -r requirements.txt
+
+# Start the server
 python main.py
-# API running at http://localhost:8000
-# Swagger docs at http://localhost:8000/docs
 ```
 
-### 2. Frontend
-
-**Option A — Next.js (recommended)**
-```bash
-npx create-next-app@latest kernellab-ui --app --js --no-tailwind --no-eslint
-cd kernellab-ui
-# Copy App.jsx to app/page.js (or src/app/page.js)
-# Add to layout.js head: <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;900&display=swap" rel="stylesheet" />
-npm run dev
-# Open http://localhost:3000
+**Expected Output:**
+```
+INFO:     Uvicorn running on http://127.0.0.1:8000
 ```
 
-**Option B — Vite React**
+- **API**: http://localhost:8000
+- **Swagger Docs**: http://localhost:8000/docs
+- **OpenAPI Spec**: http://localhost:8000/openapi.json
+
+### 2. Frontend Setup (Next.js)
+
 ```bash
-npm create vite@latest kernellab-ui -- --template react
-cd kernellab-ui
-# Replace src/App.jsx with the provided App.jsx
+cd frontend
+
+# Install dependencies
 npm install
+
+# Start development server
 npm run dev
 ```
+
+**Expected Output:**
+```
+▲ Next.js 15.0.0
+- Local:        http://localhost:3000
+```
+
+- **Application**: http://localhost:3000
+
+### 3. Vite Development (Optional)
+
+If using the Vite React setup alongside Next.js:
+
+```bash
+cd frontend/kernellab-ui
+
+# Install dependencies
+npm install
+
+# Start development server
+npm run dev
+```
+
+---
+
+### Full Stack Startup Checklist
+
+- [ ] Backend running on port 8000 (FastAPI/Uvicorn)
+- [ ] Frontend running on port 3000 (Next.js or Vite)
+- [ ] Both services have internet connectivity for cross-origin requests
+- [ ] Browser opens to http://localhost:3000
 
 ---
 
@@ -154,14 +194,44 @@ npm run dev
 ## Project Structure
 
 ```
-kernellab/
-├── backend/
-│   ├── main.py           # FastAPI app, route handlers
-│   ├── simulation.py     # OS simulation engine (PCB, Scheduler, Memory, Interrupts)
-│   └── requirements.txt
-├── frontend/
-│   └── App.jsx           # Complete React desktop UI (single file)
-└── README.md
+KernelLab/
+├── README.md                          # Project documentation
+│
+├── backend/                           # FastAPI backend (Python)
+│   ├── main.py                        # FastAPI app & route handlers
+│   ├── simulation.py                  # OS simulation engine
+│   ├── requirements.txt               # Python dependencies
+│   └── env/                           # Virtual environment (venv)
+│       ├── pyvenv.cfg
+│       ├── Scripts/                   # Activation scripts
+│       └── Lib/site-packages/         # Installed packages
+│
+└── frontend/                          # Next.js frontend (React)
+    ├── jsconfig.json                  # JavaScript config
+    ├── next.config.mjs                # Next.js configuration
+    ├── package.json                   # Node dependencies
+    ├── README.md                      # Frontend-specific docs
+    ├── public/                        # Static assets
+    │
+    ├── src/                           # Next.js app source
+    │   ├── app/
+    │   │   ├── layout.js              # Root layout
+    │   │   ├── page.js                # Home page
+    │   │   └── globals.css            # Global styles
+    │   └── (other pages)
+    │
+    └── kernellab-ui/                  # Vite React development setup
+        ├── vite.config.js             # Vite configuration
+        ├── package.json               # Vite project dependencies
+        ├── index.html                 # HTML entry point
+        ├── eslint.config.js
+        ├── public/                    # Static assets
+        └── src/
+            ├── main.jsx               # React entry point
+            ├── App.jsx                # Main App component
+            ├── App.css                # App styles
+            ├── index.css              # Global styles
+            └── assets/                # Component assets
 ```
 
 ---
